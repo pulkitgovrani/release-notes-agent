@@ -1,0 +1,27 @@
+# Example GitHub Action — nudge authors to state the user impact on a PR.
+# Pairs with PULL_REQUEST_TEMPLATE.md. Drop into a repo's .github/workflows/.
+name: PR user-impact nudge
+on:
+  pull_request:
+    types: [opened]
+
+jobs:
+  nudge:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || "";
+            const m = body.match(/#{1,6}\s*user impact\s*\n([\s\S]*?)(?=\n#{1,6}\s|$)/i);
+            const impact = (m ? m[1] : "").replace(/<!--[\s\S]*?-->/g, "").trim();
+            if (!impact) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body: "🤖 **What's the user impact of this change?** Add a `## User impact` line to the PR description (or write `internal` if there's none) — it becomes the release note.",
+              });
+            }

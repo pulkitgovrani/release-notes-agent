@@ -1,0 +1,39 @@
+# Example GitHub Action — generate the changelog AND publish it to GitHub Pages.
+# Drop into a repo's .github/workflows/. Then: Settings → Pages → Source = GitHub Actions.
+name: Release Notes → Pages
+on:
+  release:
+    types: [published]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r release-notes-agent/requirements.txt
+      - name: Generate changelog
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python release-notes-agent/main.py \
+            --repo "${{ github.repository }}" \
+            --version "${{ github.event.release.tag_name || 'latest' }}" \
+            --output ./_site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./_site
+      - id: deploy
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,30 @@
+# Example GitHub Action — drop into a repo's .github/workflows/.
+# Runs on every published release and regenerates the changelog (~$0 infra).
+name: Release Notes
+on:
+  release:
+    types: [published]
+
+jobs:
+  notes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r release-notes-agent/requirements.txt
+      - name: Generate release notes
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python release-notes-agent/main.py \
+            --repo "${{ github.repository }}" \
+            --version "${{ github.event.release.tag_name }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: changelog
+          path: output/

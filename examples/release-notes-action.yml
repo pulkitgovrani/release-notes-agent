@@ -1,0 +1,37 @@
+# Easiest setup — use the PUBLISHED action (no folder copy / vendoring needed).
+# Generates the changelog on each release and publishes it to GitHub Pages.
+#
+# Setup in your repo:
+#   1. Settings → Secrets and variables → Actions → new secret: ANTHROPIC_API_KEY
+#   2. Settings → Pages → Source = "GitHub Actions"
+#   3. Drop this file into .github/workflows/  (done!)
+name: Release Notes
+on:
+  release:
+    types: [published]
+  workflow_dispatch: {}        # manual run button
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      # No actions/checkout needed — the action reads your PRs via the GitHub API.
+      - name: Generate release notes
+        uses: pulkitgovrani/release-notes-agent@v1
+        with:
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          version: ${{ github.event.release.tag_name || 'latest' }}
+          output: _site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,34 @@
+# Example GitHub Action — scheduled cadence (weekly / every-N-hours).
+# Drop into a repo's .github/workflows/.
+name: Release Notes (scheduled)
+on:
+  schedule:
+    - cron: "0 9 * * 1"     # weekly: every Monday 09:00 UTC
+    # - cron: "0 */5 * * *"  # or every 5 hours (use --since-hours 5 below)
+  workflow_dispatch: {}      # manual run button
+
+jobs:
+  notes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r release-notes-agent/requirements.txt
+      - name: Generate weekly release notes
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python release-notes-agent/main.py \
+            --repo "${{ github.repository }}" \
+            --since-days 7 \
+            --version "$(date +%Y-%m-%d)"
+          # every-5h variant: replace --since-days 7 with --since-hours 5
+      - uses: actions/upload-artifact@v4
+        with:
+          name: changelog
+          path: output/

@@ -1,0 +1,29 @@
+# Example GitHub Action — auto-suggest the user impact on a new PR (NEXT_STEPS step 3).
+# Posts a suggested release-note line; the author confirms or edits it.
+name: PR impact suggestion
+on:
+  pull_request:
+    types: [opened]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  suggest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r release-notes-agent/requirements.txt
+      - name: Suggest user impact
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python release-notes-agent/suggest_impact.py \
+            --repo "${{ github.repository }}" \
+            --pr ${{ github.event.pull_request.number }} \
+            --comment

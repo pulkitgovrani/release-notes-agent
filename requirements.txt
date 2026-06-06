@@ -1,0 +1,5 @@
+# Needs a recent Anthropic SDK (messages.parse / structured outputs).
+anthropic>=0.49
+PyGithub>=2.3
+python-dotenv>=1.0
+ollama>=0.4          # only needed for --local (Ollama) mode
