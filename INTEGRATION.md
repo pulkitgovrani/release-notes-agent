@@ -15,12 +15,18 @@ code — just one workflow file:
 3. Drop [`examples/release-notes-action.yml`](examples/release-notes-action.yml) into
    `.github/workflows/`. It pins `uses: pulkitgovrani/release-notes-agent@v1`.
 
+**Free / no Claude:** instead of step 1's Anthropic key, add an `NVIDIA_API_KEY` secret
+(free at [build.nvidia.com](https://build.nvidia.com)) and set `provider: nvidia` +
+`nvidia-api-key: ${{ secrets.NVIDIA_API_KEY }}` in the workflow — it runs on open models
+(Llama, Nemotron…) with no Anthropic cost.
+
 That's it — no `release-notes-agent/` folder in the consumer repo. On each published
 Release the changelog regenerates and deploys to `https://<owner>.github.io/<repo>/`.
 The "vendor the folder" steps below are the manual alternative.
 
 ## Prerequisites
-- An **Anthropic API key** — CI runners can't reach a local Ollama, so use the API there.
+- An **Anthropic API key** — or a free **NVIDIA NIM key** ([build.nvidia.com](https://build.nvidia.com))
+  with `provider: nvidia`. CI runners can't reach a local Ollama, so use a hosted provider there.
 - Repo admin access (to add a secret + enable Pages).
 
 ## Steps (~10 min)

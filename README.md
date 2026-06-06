@@ -102,6 +102,19 @@ vendored code. See [INTEGRATION.md](INTEGRATION.md).
     output: _site
 ```
 
+**Free / no Claude — NVIDIA NIM:** run on a free open model instead of an Anthropic key.
+Grab a key at [build.nvidia.com](https://build.nvidia.com), add it as the `NVIDIA_API_KEY`
+secret, and switch the provider:
+
+```yaml
+- uses: pulkitgovrani/release-notes-agent@v1
+  with:
+    provider: nvidia
+    nvidia-api-key: ${{ secrets.NVIDIA_API_KEY }}
+    version: ${{ github.event.release.tag_name || 'latest' }}
+    output: _site
+```
+
 **Manual alternative (vendor the folder):** copy `release-notes-agent/` into the repo and
 use [`examples/release-notes.yml`](examples/release-notes.yml). Runs on every published
 release and regenerates the changelog.
