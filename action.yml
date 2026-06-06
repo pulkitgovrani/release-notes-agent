@@ -9,7 +9,11 @@ branding:
 # consumer's repo needed) and runs this repo's main.py from ${{ github.action_path }}.
 inputs:
   anthropic-api-key:
-    description: "Anthropic API key for Claude. Required unless provider is 'ollama'."
+    description: "Anthropic API key for Claude. Required when provider is 'anthropic' (the default)."
+    required: false
+    default: ""
+  nvidia-api-key:
+    description: "NVIDIA NIM API key (free at build.nvidia.com). Required when provider is 'nvidia'. OpenAI-compatible, runs open models — no Claude used."
     required: false
     default: ""
   github-token:
@@ -49,9 +53,13 @@ inputs:
     required: false
     default: "true"
   provider:
-    description: "LLM provider: 'anthropic' (default) or 'ollama'."
+    description: "LLM provider: 'anthropic' (default) or 'nvidia'. ('ollama' is local-only — it can't reach a model on CI runners.)"
     required: false
     default: "anthropic"
+  nvidia-model:
+    description: "Model to use when provider is 'nvidia', e.g. meta/llama-3.3-70b-instruct. Empty = the agent's default."
+    required: false
+    default: ""
   python-version:
     description: "Python version for the runner."
     required: false
@@ -79,11 +87,13 @@ runs:
       shell: bash
       env:
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+        NVIDIA_API_KEY: ${{ inputs.nvidia-api-key }}
         GITHUB_TOKEN: ${{ inputs.github-token }}
         IN_REPO: ${{ inputs.repo }}
         IN_VERSION: ${{ inputs.version }}
         IN_OUTPUT: ${{ inputs.output }}
         IN_PROVIDER: ${{ inputs.provider }}
+        IN_NVIDIA_MODEL: ${{ inputs.nvidia-model }}
         IN_SINCE: ${{ inputs.since }}
         IN_LAST: ${{ inputs.last }}
         IN_SINCE_DAYS: ${{ inputs.since-days }}
@@ -97,5 +107,6 @@ runs:
         if [ -n "$IN_SINCE_DAYS" ];  then args+=( --since-days "$IN_SINCE_DAYS" ); fi
         if [ -n "$IN_SINCE_HOURS" ]; then args+=( --since-hours "$IN_SINCE_HOURS" ); fi
         if [ "$IN_ANNOUNCE" = "false" ]; then args+=( --no-announce ); fi
+        if [ -n "$IN_NVIDIA_MODEL" ]; then args+=( --nvidia-model "$IN_NVIDIA_MODEL" ); fi
         python "$ACTION_PATH/main.py" "${args[@]}"
         echo "output-dir=$IN_OUTPUT" >> "$GITHUB_OUTPUT"

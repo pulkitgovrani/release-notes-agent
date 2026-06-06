@@ -4,9 +4,41 @@ from __future__ import annotations
 
 import html
 import os
+import re
+from difflib import SequenceMatcher
 from typing import Dict, List
 
 from models import AnnouncementDrafts, PRInfo, ReleaseNotes
+
+_BACKPORT_RE = re.compile(r"^\s*back[\s-]?ports?\s+", re.I)
+_MERGE_THRESHOLD = 0.9  # char-similarity above which two lines are treated as the same change
+
+
+def _norm(text: str) -> str:
+    """Normalize a user-facing line so backports / dupes collapse together (drop a leading
+    'Backports', lowercase, strip trailing period and runs of whitespace)."""
+    t = _BACKPORT_RE.sub("", text or "").strip().lower().rstrip(".")
+    return re.sub(r"\s+", " ", t)
+
+
+def _merge_items(items: list) -> list:
+    """Collapse near-duplicate lines (same fix backported to several release branches, or
+    true dupes) into one row linking ALL its PRs. Uses fuzzy similarity so 'Rejects X' and
+    'Backports reject X' merge, while genuinely distinct lines stay separate. Grounding is
+    preserved — every PR still appears (as a pill here, individually in the technical log)."""
+    groups: List[dict] = []
+    for it in items:
+        k = _norm(it.user_facing_text)
+        match = next((g for g in groups
+                      if k == g["key"] or SequenceMatcher(None, k, g["key"]).ratio() >= _MERGE_THRESHOLD),
+                     None)
+        if match is None:
+            groups.append({"key": k, "text": it.user_facing_text, "prs": [it.pr_number]})
+        else:
+            if len(it.user_facing_text) < len(match["text"]):  # prefer the cleaner / non-"Backports" phrasing
+                match["text"] = it.user_facing_text
+            match["prs"].append(it.pr_number)
+    return groups
 
 CATEGORY_META = {
     "breaking": ("⚠️", "Breaking changes"),
@@ -58,6 +90,13 @@ footer{margin-top:3.2em;padding-top:1.3em;border-top:1px solid var(--line);
 .tweet:first-child{border-top:none}
 .tnum{flex:none;color:var(--muted);font-size:.74rem;font-variant-numeric:tabular-nums;padding-top:.15em}
 .ttxt{flex:1;white-space:pre-wrap}
+.stats{display:flex;flex-wrap:wrap;gap:.5em;margin:1.1em 0 0}
+.chip{display:inline-flex;align-items:center;gap:.35em;font-size:.8rem;font-weight:600;
+ color:#34343d;background:#fff;border:1px solid var(--line);border-radius:999px;padding:.28em .75em}
+.prov{display:inline-flex;align-items:center;gap:.45em;font-weight:600;color:#34343d;margin-top:.6em}
+.prov .dot{width:.55em;height:.55em;border-radius:50%;background:#76b900;
+ box-shadow:0 0 0 3px rgba(118,185,0,.18)}
+.pills{display:flex;flex-wrap:wrap;gap:.3em;justify-content:flex-end}
 """
 
 _COPY_JS = (
@@ -91,11 +130,14 @@ def _sections_html(notes: ReleaseNotes, prs: List[PRInfo]) -> str:
             continue
         emoji, title = CATEGORY_META[cat]
         rows = []
-        for it in items:
-            url = html.escape(urls.get(it.pr_number, "#"))
+        for g in _merge_items(items):
+            pills = "".join(
+                f'<a class="pill" href="{html.escape(urls.get(n, "#"))}">#{n}</a>'
+                for n in g["prs"]
+            )
             rows.append(
-                f'<div class="item"><span class="txt">{html.escape(it.user_facing_text)}</span>'
-                f'<a class="pill" href="{url}">#{it.pr_number}</a></div>'
+                f'<div class="item"><span class="txt">{html.escape(g["text"])}</span>'
+                f'<span class="pills">{pills}</span></div>'
             )
         out.append(
             f'<section class="section {cat}"><h2>{emoji} {title}</h2>'
@@ -138,6 +180,34 @@ def _announce_html(drafts: AnnouncementDrafts) -> str:
     )
 
 
+def _stats_chips(notes: ReleaseNotes) -> str:
+    """Release-at-a-glance: one chip per non-empty category, counting distinct changes
+    (after merge), so backport-padded counts don't overstate the release."""
+    grouped = _grouped(notes)
+    chips = []
+    for cat in _ORDER:
+        items = grouped[cat]
+        if not items:
+            continue
+        n = len(_merge_items(items))
+        emoji, title = CATEGORY_META[cat]
+        chips.append(f'<span class="chip">{emoji} {n} {html.escape(title.lower())}</span>')
+    return f'<div class="stats">{"".join(chips)}</div>' if chips else ""
+
+
+def _provenance() -> str:
+    """Human label of the model that wrote these notes — transparency for AI-drafted copy."""
+    import llm
+    label = llm.provider_label()
+    if label.startswith("nvidia:"):
+        return "NVIDIA " + label.split(":", 1)[1]
+    if label.startswith("ollama:"):
+        return "a local model (" + label.split(":", 1)[1] + ")"
+    if label == "anthropic":
+        return "Anthropic Claude"
+    return label
+
+
 def render_html(notes: ReleaseNotes, version: str, prs: List[PRInfo],
                 repo: str, date_label: str, drafts: AnnouncementDrafts | None = None) -> str:
     sections = _sections_html(notes, prs)
@@ -153,11 +223,14 @@ def render_html(notes: ReleaseNotes, version: str, prs: List[PRInfo],
         f'<div class="eyebrow">{r} · Changelog</div>'
         f"<h1>What's new in {v}</h1>"
         f'<div class="date">{html.escape(date_label)}</div>'
+        f"{_stats_chips(notes)}"
         f'<p class="summary">{html.escape(notes.summary)}</p>'
         f"{sections}"
         f"{announce}"
         '<footer>📡 <a href="feed.xml">Subscribe via RSS</a> · '
-        "powered by Release Intelligence</footer>"
+        "powered by Release Intelligence"
+        f'<br><span class="prov"><span class="dot"></span>'
+        f"AI-drafted with {html.escape(_provenance())}, grounded in real merged PRs</span></footer>"
         f"</div>{script}</body></html>"
     )
 
@@ -172,11 +245,12 @@ def render_markdown(notes: ReleaseNotes, version: str, prs: List[PRInfo]) -> str
             continue
         emoji, title = CATEGORY_META[cat]
         lines.append(f"## {emoji} {title}")
-        for it in items:
-            lines.append(f"- {it.user_facing_text} ([#{it.pr_number}]({urls.get(it.pr_number, '')}))")
+        for g in _merge_items(items):
+            links = ", ".join(f"[#{n}]({urls.get(n, '')})" for n in g["prs"])
+            lines.append(f"- {g['text']} ({links})")
         lines.append("")
     lines += ["---", "<details><summary>Technical changelog</summary>", ""]
-    for it in notes.items:
+    for it in notes.items:  # full, un-merged — every PR listed for a complete audit trail
         lines.append(f"- #{it.pr_number} ({it.category}): {it.technical_text}")
     lines += ["", "</details>"]
     return "\n".join(lines)

@@ -51,11 +51,15 @@ def main() -> int:
     ap.add_argument("--announce", action=argparse.BooleanOptionalAction, default=True,
                     help="also draft X/Slack/LinkedIn announcements (--no-announce to skip)")
     # --- LLM provider ---
-    ap.add_argument("--provider", choices=["anthropic", "ollama"], default=None,
+    ap.add_argument("--provider", choices=["anthropic", "nvidia", "ollama"], default=None,
                     help="LLM provider (default: env LLM_PROVIDER or anthropic)")
     ap.add_argument("--local", action="store_true", help="shortcut for --provider ollama (free, offline)")
+    ap.add_argument("--nvidia", action="store_true",
+                    help="shortcut for --provider nvidia (uses NVIDIA_API_KEY, OpenAI-compatible)")
     ap.add_argument("--ollama-model", dest="ollama_model", default=None,
                     help="local model name, e.g. gemma3n:e4b (see: ollama list)")
+    ap.add_argument("--nvidia-model", dest="nvidia_model", default=None,
+                    help="NVIDIA model, e.g. meta/llama-3.3-70b-instruct")
     # --- window: pick one (default = since last release) ---
     ap.add_argument("--since", default=None, help="tag to diff from")
     ap.add_argument("--last", type=int, default=None, help="most recent N merged PRs")
@@ -66,12 +70,22 @@ def main() -> int:
     args = ap.parse_args()
 
     # Resolve provider (CLI > env > default) and validate prerequisites.
-    provider = "ollama" if args.local else (args.provider or os.getenv("LLM_PROVIDER", "anthropic"))
+    if args.local:
+        provider = "ollama"
+    elif args.nvidia:
+        provider = "nvidia"
+    else:
+        provider = args.provider or os.getenv("LLM_PROVIDER", "anthropic")
     os.environ["LLM_PROVIDER"] = provider
     if args.ollama_model:
         os.environ["OLLAMA_MODEL"] = args.ollama_model
+    if args.nvidia_model:
+        os.environ["NVIDIA_MODEL"] = args.nvidia_model
     if provider == "anthropic" and not os.getenv("ANTHROPIC_API_KEY"):
-        print("Set ANTHROPIC_API_KEY, or use --local for a free local Ollama model.", file=sys.stderr)
+        print("Set ANTHROPIC_API_KEY, or use --nvidia / --local.", file=sys.stderr)
+        return 2
+    if provider == "nvidia" and not os.getenv("NVIDIA_API_KEY"):
+        print("Set NVIDIA_API_KEY (free at build.nvidia.com), or use --local.", file=sys.stderr)
         return 2
     print(f"→ LLM provider: {llm.provider_label()}")
 
