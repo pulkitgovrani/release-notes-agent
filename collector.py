@@ -1,6 +1,6 @@
 """Collector — find merged PRs since the last release and gather their context
-(body, linked issues, diff summary). This is the deterministic 'read from GitHub'
-half; no LLM here."""
+(body, linked issues, and the unified diff of each changed file). This is the
+deterministic 'read from GitHub' half; no LLM here."""
 from __future__ import annotations
 
 import re
@@ -10,7 +10,8 @@ from typing import List, Optional
 from github import Github
 from github.Repository import Repository
 
-from config import BODY_TRUNCATE, ISSUE_TRUNCATE, MAX_PRS, MAX_SCAN
+from config import (BODY_TRUNCATE, DIFF_TRUNCATE, ISSUE_TRUNCATE, MAX_PRS,
+                    MAX_SCAN, PATCH_TRUNCATE)
 from models import LinkedIssue, PRInfo
 
 # "Closes #12", "fixes #7", "resolved #99"
@@ -78,10 +79,19 @@ def _linked_issues(repo: Repository, body: Optional[str]) -> List[LinkedIssue]:
 
 
 def _build_pr_info(repo: Repository, pr) -> PRInfo:
+    # Read the actual code change: each file's unified diff (f.patch), not just its name.
+    # patch is None for binary or very large files — skip those gracefully.
+    files: List[str] = []
+    diff_parts: List[str] = []
     try:
-        files = [f.filename for f in pr.get_files()][:50]
+        for f in pr.get_files():
+            if len(files) >= 50:
+                break
+            files.append(f.filename)
+            if f.patch:
+                diff_parts.append(f"# {f.filename}\n{_truncate(f.patch, PATCH_TRUNCATE)}")
     except Exception:
-        files = []
+        pass  # API/permission hiccup — use whatever we gathered
     return PRInfo(
         number=pr.number,
         title=pr.title or "",
@@ -92,6 +102,7 @@ def _build_pr_info(repo: Repository, pr) -> PRInfo:
         url=pr.html_url,
         labels=[l.name for l in pr.labels],
         files_changed=files,
+        diff=_truncate("\n\n".join(diff_parts), DIFF_TRUNCATE),
         additions=pr.additions or 0,
         deletions=pr.deletions or 0,
         linked_issues=_linked_issues(repo, pr.body),

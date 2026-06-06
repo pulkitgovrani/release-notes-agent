@@ -24,6 +24,7 @@ class PRInfo(BaseModel):
     url: str
     labels: List[str]
     files_changed: List[str]
+    diff: str = ""                  # combined unified diff of the changed files (the actual code change)
     additions: int
     deletions: int
     linked_issues: List[LinkedIssue]

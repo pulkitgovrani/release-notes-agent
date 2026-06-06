@@ -29,7 +29,8 @@ def suggest(repo_name, pr_number, token):
     repo = collector.get_repo(token, repo_name)
     pr = collector.collect_one(repo, pr_number)
     payload = json.dumps(
-        {"title": pr.title, "body": pr.body, "files_changed": pr.files_changed[:20]}, indent=2
+        {"title": pr.title, "body": pr.body,
+         "files_changed": pr.files_changed[:20], "diff": pr.diff}, indent=2
     )
     s = llm.structured(GUIDE, payload, ImpactSuggestion, anthropic_model=GEN_MODEL, max_tokens=1000)
     return pr, s

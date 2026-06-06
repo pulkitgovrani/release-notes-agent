@@ -8,11 +8,11 @@ from models import LinkedIssue, PRInfo
 _REPO_URL = "https://github.com/acme/widget"
 
 
-def _pr(number, title, body, labels, files, add, dele, issues=None, user_impact=""):
+def _pr(number, title, body, labels, files, add, dele, issues=None, user_impact="", diff=""):
     return PRInfo(
         number=number, title=title, body=body, author="dev",
         merged_at="2026-06-05T10:00:00+00:00", url=f"{_REPO_URL}/pull/{number}",
-        labels=labels, files_changed=files, additions=add, deletions=dele,
+        labels=labels, files_changed=files, diff=diff, additions=add, deletions=dele,
         user_impact=user_impact, linked_issues=issues or [],
     )
 
@@ -28,6 +28,18 @@ def sample_prs():
                          body="Lots of users on the forum keep asking for a dark theme, "
                               "especially for late-night work.")],
             user_impact="Users finally get the dark theme they've been asking for.",
+            diff="# src/theme.ts\n"
+                 "@@ -1,2 +1,9 @@\n"
+                 '+export type Theme = "light" | "dark";\n'
+                 "+export function setTheme(t: Theme) {\n"
+                 "+  document.documentElement.dataset.theme = t;\n"
+                 '+  localStorage.setItem("theme", t);\n'
+                 "+}\n\n"
+                 "# src/settings.tsx\n"
+                 "@@ -40,6 +40,11 @@ export function Appearance() {\n"
+                 "+  <Toggle label=\"Dark mode\"\n"
+                 "+          checked={theme === 'dark'}\n"
+                 "+          onChange={v => setTheme(v ? 'dark' : 'light')} />",
         ),
         _pr(
             138, "fix: scheduled exports running one hour late",
@@ -37,6 +49,11 @@ def sample_prs():
             ["bug"], ["src/jobs/export.ts"], 22, 9,
             [LinkedIssue(number=131, title="My 9am export arrives at 10am",
                          body="Every export is exactly one hour late since last week.")],
+            diff="# src/jobs/export.ts\n"
+                 "@@ -10,7 +10,7 @@ function nextRun(job, account) {\n"
+                 "-  const at = DateTime.local().set({ hour: job.hour });\n"
+                 "+  const at = DateTime.now().setZone(account.timezone)\n"
+                 "+                         .set({ hour: job.hour });",
         ),
         _pr(
             145, "feat!: rename `name` to `full_name` in the Users API",
@@ -44,6 +61,13 @@ def sample_prs():
             "for consistency with the rest of the API. The old field is removed.",
             ["api", "breaking"], ["src/api/users.ts", "docs/api.md"], 40, 31,
             user_impact="Anyone reading the `name` field from the Users API must switch to `full_name`.",
+            diff="# src/api/users.ts\n"
+                 "@@ -20,7 +20,7 @@ export function serializeUser(u) {\n"
+                 "   return {\n"
+                 "     id: u.id,\n"
+                 "-    name: u.name,\n"
+                 "+    full_name: u.name,\n"
+                 "   };",
         ),
         _pr(
             140, "perf: stream CSV export instead of buffering",

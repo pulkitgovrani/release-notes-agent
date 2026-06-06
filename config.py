@@ -8,5 +8,7 @@ FILTER_MODEL = os.getenv("FILTER_MODEL", "claude-haiku-4-5")  # cheap user-facin
 
 MAX_PRS = int(os.getenv("MAX_PRS", "100"))    # cap PRs included per release
 MAX_SCAN = int(os.getenv("MAX_SCAN", "400"))  # cap closed-PR scan to bound API calls
-BODY_TRUNCATE = 1200                           # chars of PR body sent to the model
-ISSUE_TRUNCATE = 600                           # chars of linked-issue body sent to the model
+BODY_TRUNCATE = 4000                           # chars of PR body sent to the model
+ISSUE_TRUNCATE = 2000                          # chars of linked-issue body sent to the model
+PATCH_TRUNCATE = 4000                          # chars of each changed file's diff (per file)
+DIFF_TRUNCATE = 20000                          # chars of the combined diff sent to the model (per PR)

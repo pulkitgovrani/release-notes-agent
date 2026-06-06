@@ -1,7 +1,8 @@
 # Release Intelligence Agent
 
-Reads merged PRs since your last release, understands the *why*, and writes a polished
-**"What's new"** for users + a technical changelog — every line grounded in a real PR.
+Reads merged PRs since your last release — their descriptions, linked issues, **and the
+actual code diffs** — understands the *why*, and writes a polished **"What's new"** for users
++ a technical changelog, every line grounded in a real PR.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the design and the BUILD-NOW vs NOT-YET scope,
 and [NEXT_STEPS.md](NEXT_STEPS.md) for the backlog (incl. the PR-time impact-capture bot).
@@ -75,13 +76,15 @@ See [`examples/release-notes-scheduled.yml`](examples/release-notes-scheduled.ym
 ## How it works
 
 ```
-collector.py  → merged PRs + commits + linked issues since the last release
+collector.py  → merged PRs + commits + linked issues + the code diff of each, since the last release
 filter.py     → user-facing vs internal (heuristics first, Haiku for the rest)
 agent.py      → grounded notes (Sonnet): every item cites a PR #; dev-speak → user benefit
 announce.py   → X thread + Slack + LinkedIn drafts from those same grounded notes
 publish.py    → changelog page (HTML) + Markdown + RSS feed + ANNOUNCEMENTS.md
 ```
 
+- **Reads the code, not just messages:** each PR's unified diff is sent to the model (not only
+  the title/description), so notes reflect what actually changed. Truncation is tunable in `config.py`.
 - **Grounding:** items are dropped if they don't tie to a real PR (`agent.py`).
 - **Models:** Sonnet for generation, Haiku for the cheap filter — edit in `config.py`.
 - **Caching:** the style guide / filter guide are prompt-cached.

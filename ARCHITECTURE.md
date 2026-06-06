@@ -28,7 +28,7 @@ The whole product is big. As a solo dev, ship the narrow wedge first. Discipline
 | Collect merged PRs since last release | **Being the email sender to end users** (deliverability, lists, GDPR) → RSS + page covers "notify" for now |
 | **Filter user-facing vs internal** (hide refactors/CI/deps) | PR-time "user impact" capture bot (fast Phase-1 add; MVP infers instead) |
 | Generate user-facing + technical notes, **each grounded in a PR #** | Audience segmentation / usage-based personalization |
-| Pull the "why" from PR body + linked issue (+ diff fallback) | Multi-language notes |
+| Pull the "why" from PR body + linked issue (+ the actual code diff) | Multi-language notes |
 | Publish: changelog page + **RSS feed** + GitHub Release body | Open-rate analytics + feedback loop |
 | Manual approve/edit before publish | Slack / social auto-post |
 
@@ -36,7 +36,7 @@ The whole product is big. As a solo dev, ship the narrow wedge first. Discipline
 
 ## What's IN the hackathon MVP
 - A trigger: git tag / merge-to-main / manual `release since vX`.
-- Collect merged PRs + commits since the last release (title, body, linked issue, diff summary).
+- Collect merged PRs + commits since the last release (title, body, linked issue, **and the actual file diffs**).
 - **Filter** each PR: user-facing or internal.
 - Release agent (Claude) groups + classifies (feature / fix / breaking), translates dev-speak → user benefit, and **grounds every line in a PR #**.
 - Output **two registers**: a technical changelog *and* a user-facing "What's new".
@@ -56,13 +56,13 @@ The whole product is big. As a solo dev, ship the narrow wedge first. Discipline
           ▼
   ┌──────────────────┐
   │  Collector        │  find last release → merged PRs + commits since
-  └────────┬─────────┘   (title, body, linked issue, diff summary = the "why")
+  └────────┬─────────┘   (title, body, linked issue, code diff = the "why" + the "what")
            ▼
   ┌──────────────────┐
   │  Filter           │  user-facing vs internal → drop refactors/CI/dep-bumps
   └────────┬─────────┘
            ▼
-  ┌──────────────────┐   tools: list_merged_prs, read_pr, read_issue, read_diff
+  ┌──────────────────┐   inputs: PR title/body, linked issues, changed-file diffs
   │  Release Agent   │   · groups + classifies (feature/fix/breaking)
   │  (Claude)        │   · dev-speak → user benefit
   │                  │   · GROUNDS every line in a PR #  (no invented features)
@@ -82,9 +82,9 @@ The whole product is big. As a solo dev, ship the narrow wedge first. Discipline
 ```
 
 ### Components
-1. **`collector.py`** — GitHub API (PyGithub): find the last release tag, list merged PRs + commits since, gather each PR's body + linked issue + a diff summary.
+1. **`collector.py`** — GitHub API (PyGithub): find the last release tag, list merged PRs + commits since, gather each PR's body + linked issue + **the unified diff of each changed file** (truncated per `PATCH_TRUNCATE`/`DIFF_TRUNCATE`). No LLM here — pure data access.
 2. **`filter.py`** — classify each PR user-facing vs internal. Cheap heuristics first (labels, paths like `.github/`, `chore:`/`refactor:` prefixes), then Claude for the ambiguous ones (route to Haiku `claude-haiku-4-5` to save cost).
-3. **`agent.py`** — Claude Sonnet 4.6 (`claude-sonnet-4-6`); escalate final polish to Opus 4.8 (`claude-opus-4-8`). Tools: `read_pr`, `read_issue`, `read_diff`. Produces the two registers from one style-guide system prompt, **emitting `{note, pr_number}` pairs so every line stays grounded**. **Prompt-cache the style guide** (fires every release — caching pays off fast).
+3. **`agent.py`** — Claude Sonnet 4.6 (`claude-sonnet-4-6`); escalate final polish to Opus 4.8 (`claude-opus-4-8`). Receives each PR's title, body, linked issues, changed-file paths **and the actual code diff** in one structured call (no tool round-trips). Produces the two registers from one style-guide system prompt, **emitting `{note, pr_number}` pairs so every line stays grounded**. **Prompt-cache the style guide** (fires every release — caching pays off fast).
 4. **`publish.py`** — render markdown → a changelog page (static HTML / GitHub Pages for MVP) + an **RSS feed** (`feed.xml`) so users can subscribe; also set the GitHub Release body via the API.
 5. **(impact capture — Phase-1 add)** — a PR bot/template that asks "what's the user impact?" at PR time. MVP skips this and infers; this is the first post-hackathon upgrade and the differentiator.
 
@@ -102,7 +102,7 @@ The whole product is big. As a solo dev, ship the narrow wedge first. Discipline
 3. **(45m) Filter** — drop internal/non-user-facing PRs so the notes stay clean.
 4. **(45m) Two registers** — add the technical changelog + group/classify (feature/fix/breaking).
 5. **(60m) Publish** — changelog page + RSS feed + set the GitHub Release body.
-6. **(45m) "Why" enrichment** — pull linked issues (+ diff fallback) so notes explain *why*, not just *what*.
+6. **(45m) "Why" enrichment** — pull linked issues + the code diff so notes explain *why*, not just *what*.
 7. **(remaining) Polish the page + demo script + record the clip.**
 
 > Rule: keep one working end-to-end path at all times; layer on top.
